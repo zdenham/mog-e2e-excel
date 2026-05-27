@@ -483,6 +483,13 @@ const scenarios = [
     edit: 'table-header-row-values',
     expectedExcelStatus: 'corrupt',
     issue: 'table without totals row has header cells changed while tableColumn names remain stale',
+  },
+  {
+    id: 'table-structured-formulas-header-row',
+    file: 'table-structured-formulas.xlsx',
+    edit: 'table-header-row-values',
+    expectedExcelStatus: 'corrupt',
+    issue: 'table with calculated/formula columns has header cells changed while tableColumn names remain stale',
   }
 ];
 
