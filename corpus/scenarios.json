@@ -63,6 +63,13 @@
       "edit": "table-second-header-row",
       "expectedExcelStatus": "corrupt",
       "issue": "second table header cells changed while that table part keeps old tableColumn names"
+    },
+    {
+      "id": "table-no-totals-header-row",
+      "file": "table-no-totals.xlsx",
+      "edit": "table-header-row-values",
+      "expectedExcelStatus": "corrupt",
+      "issue": "table without totals row has header cells changed while tableColumn names remain stale"
     }
   ]
 }
