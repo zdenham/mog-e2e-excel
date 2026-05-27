@@ -455,6 +455,13 @@ const scenarios = [
     edit: 'table-header-number-cell',
     expectedExcelStatus: 'corrupt',
     issue: 'numeric visible table header while tableColumn metadata remains text',
+  },
+  {
+    id: 'table-autofilter-header-special-chars',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-special-chars',
+    expectedExcelStatus: 'corrupt',
+    issue: 'structured-reference-sensitive visible headers while tableColumn metadata keeps old names',
   }
 ];
 
