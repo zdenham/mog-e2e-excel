@@ -462,6 +462,13 @@ const scenarios = [
     edit: 'table-header-special-chars',
     expectedExcelStatus: 'corrupt',
     issue: 'structured-reference-sensitive visible headers while tableColumn metadata keeps old names',
+  },
+  {
+    id: 'table-offset-header-row',
+    file: 'table-offset.xlsx',
+    edit: 'table-header-offset-row',
+    expectedExcelStatus: 'corrupt',
+    issue: 'non-A1 table header cells changed while tableColumn metadata keeps old names',
   }
 ];
 
