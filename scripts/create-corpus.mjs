@@ -490,6 +490,13 @@ const scenarios = [
     edit: 'table-header-row-values',
     expectedExcelStatus: 'corrupt',
     issue: 'table with calculated/formula columns has header cells changed while tableColumn names remain stale',
+  },
+  {
+    id: 'table-special-source-headers-header-row',
+    file: 'table-special-headers.xlsx',
+    edit: 'table-header-row-values',
+    expectedExcelStatus: 'corrupt',
+    issue: 'table with special original headers has visible header cells changed while tableColumn names remain stale',
   }
 ];
 
