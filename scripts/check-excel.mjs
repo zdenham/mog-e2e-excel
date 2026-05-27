@@ -119,14 +119,16 @@ on run argv
     return "CORRUPT_OPEN_ERROR: " & errMsg
   end try
 
-  delay 8
-  set dialogText to my collectWindowText()
-  set lowerDialogText to do shell script "printf %s " & quoted form of dialogText & " | tr '[:upper:]' '[:lower:]'"
+  repeat with pollIndex from 1 to 20
+    delay 1
+    set dialogText to my collectWindowText()
+    set lowerDialogText to do shell script "printf %s " & quoted form of dialogText & " | tr '[:upper:]' '[:lower:]'"
 
-  if lowerDialogText contains "found a problem" or lowerDialogText contains "corrupt" or lowerDialogText contains "repair" or lowerDialogText contains "recovered" or lowerDialogText contains "unreadable content" then
-    my dismissKnownDialogs()
-    return "CORRUPT_DIALOG: " & dialogText
-  end if
+    if lowerDialogText contains "found a problem" or lowerDialogText contains "corrupt" or lowerDialogText contains "repair" or lowerDialogText contains "recovered" or lowerDialogText contains "unreadable content" then
+      my dismissKnownDialogs()
+      return "CORRUPT_DIALOG: " & dialogText
+    end if
+  end repeat
 
   tell application "Microsoft Excel"
     try
@@ -138,7 +140,7 @@ end run
 `,
   );
 
-  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 30_000 });
+  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 45_000 });
   const output = `${result.stdout}${result.stderr}`.trim();
   if (result.code !== 0) {
     if (output.toLowerCase().includes('not allowed assistive access')) {
