@@ -43,6 +43,7 @@ type HarnessApi = {
   exportXlsx: () => Promise<Uint8Array>;
   applyEdit: () => Promise<void>;
   applyScenarioEdit: (scenarioId: string) => Promise<void>;
+  setCells: (edits: Array<{ address: string; value: string | number | boolean | null }>) => Promise<void>;
   getStatus: () => string;
 };
 
@@ -221,18 +222,36 @@ export function App() {
     await applyEditScenario(current.workbook.getWorkbook() as Workbook, scenarioId);
   }, []);
 
+  const setCells = useCallback(
+    async (edits: Array<{ address: string; value: string | number | boolean | null }>) => {
+      const current = stateRef.current;
+      if (current.status !== 'ready') {
+        throw new Error('No workbook is loaded.');
+      }
+      const workbookApi = current.workbook.getWorkbook() as Workbook;
+      await workbookApi.batch('E2E set cells', async (batchedWorkbook) => {
+        const sheet = batchedWorkbook.activeSheet;
+        for (const edit of edits) {
+          await sheet.setCell(edit.address, edit.value);
+        }
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     window.__mogHarness = {
       loadFile,
       exportXlsx,
       applyEdit,
       applyScenarioEdit: applyNamedEdit,
+      setCells,
       getStatus: () => stateRef.current.status,
     };
     return () => {
       delete window.__mogHarness;
     };
-  }, [applyEdit, applyNamedEdit, exportXlsx, loadFile]);
+  }, [applyEdit, applyNamedEdit, exportXlsx, loadFile, setCells]);
 
   const statusLabel = useMemo(() => {
     if (state.status === 'idle') return 'No workbook loaded';

@@ -126,6 +126,29 @@ function Dismiss-ExcelDialogs {
   }
 }
 
+function Acquire-ExcelComLock {
+  param([int] $TimeoutSeconds)
+
+  $lockPath = Join-Path ([System.IO.Path]::GetTempPath()) "mog-excel-com-validation.lock"
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+  while ((Get-Date) -lt $deadline) {
+    try {
+      return [System.IO.File]::Open(
+        $lockPath,
+        [System.IO.FileMode]::OpenOrCreate,
+        [System.IO.FileAccess]::ReadWrite,
+        [System.IO.FileShare]::None
+      )
+    } catch [System.IO.IOException] {
+      Start-Sleep -Milliseconds 500
+    }
+  }
+
+  Write-CheckResult -Status "error" -Message "Timed out waiting for the Excel COM validation lock."
+  exit 1
+}
+
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   Write-CheckResult -Status "unsupported" -Message "Excel COM validation requires Windows."
   exit 0
@@ -138,6 +161,7 @@ try {
   exit 1
 }
 
+$excelComLock = Acquire-ExcelComLock -TimeoutSeconds $TimeoutSeconds
 $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("mog-excel-com-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 $workerPath = Join-Path $tempDir "worker.ps1"
@@ -180,16 +204,40 @@ function Write-WorkerResult {
   } | ConvertTo-Json -Compress | Set-Content -LiteralPath $ResultPath -Encoding UTF8
 }
 
+function Invoke-WithComRetry {
+  param(
+    [Parameter(Mandatory = $true)]
+    [scriptblock] $Script,
+
+    [int] $Attempts = 20
+  )
+
+  $lastError = $null
+  for ($attempt = 1; $attempt -le $Attempts; $attempt += 1) {
+    try {
+      return & $Script
+    } catch {
+      $lastError = $_
+      if ($_.Exception.Message -notmatch "(?i)RPC_E_CALL_REJECTED|Call was rejected by callee") {
+        throw
+      }
+      Start-Sleep -Milliseconds (500 * $attempt)
+    }
+  }
+
+  throw $lastError
+}
+
 $excel = $null
 $workbook = $null
 
 try {
-  $excel = New-Object -ComObject Excel.Application
-  $excel.Visible = $true
-  $excel.DisplayAlerts = $true
-  $excel.AskToUpdateLinks = $false
+  $excel = Invoke-WithComRetry { New-Object -ComObject Excel.Application }
+  Invoke-WithComRetry { $excel.Visible = $true }
+  Invoke-WithComRetry { $excel.DisplayAlerts = $true }
+  Invoke-WithComRetry { $excel.AskToUpdateLinks = $false }
   try {
-    $excel.AutomationSecurity = 3
+    Invoke-WithComRetry { $excel.AutomationSecurity = 3 }
   } catch {
   }
 
@@ -197,13 +245,13 @@ try {
   [void][NativeMethods]::GetWindowThreadProcessId([intptr]$excel.Hwnd, [ref]$excelPid)
   Set-Content -LiteralPath $PidPath -Value $excelPid -Encoding ASCII
 
-  $workbook = $excel.Workbooks.Open($WorkbookPath, 0, $true)
+  $workbook = Invoke-WithComRetry { $excel.Workbooks.Open($WorkbookPath, 0, $true) }
   Start-Sleep -Seconds 2
   $workbook.Close($false)
   Write-WorkerResult -Status "ok" -Message "OK"
 } catch {
   $message = $_.Exception.Message
-  if ($message -match "(?i)corrupt|repair|recovered|unreadable|found a problem") {
+  if ($message -match "(?i)corrupt|repair|recovered|unreadable|found a problem|unable to get the open property of the workbooks class") {
     Write-WorkerResult -Status "corrupt" -Message $message
   } else {
     Write-WorkerResult -Status "error" -Message $message
@@ -249,6 +297,7 @@ $workerArguments = @(
 $worker = Start-Process `
   -FilePath $powershell `
   -ArgumentList ($workerArguments -join " ") `
+  -WindowStyle Hidden `
   -PassThru
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
