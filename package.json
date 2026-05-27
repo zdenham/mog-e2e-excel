@@ -12,6 +12,7 @@
     "test": "npm run test:e2e",
     "test:e2e": "playwright test",
     "test:e2e:excel": "REQUIRE_EXCEL=1 playwright test tests/mog-excel.spec.ts",
+    "test:pipeline": "node scripts/run-e2e-pipeline.mjs",
     "excel:check": "node scripts/check-excel.mjs"
   },
   "keywords": [

@@ -13,13 +13,16 @@ type ExportFailureScenario = {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const corpusDir = path.join(repoRoot, 'corpus');
+const scenarioGrep = process.env.SCENARIO_GREP ? new RegExp(process.env.SCENARIO_GREP) : null;
 
 function exportFailureScenarios(): ExportFailureScenario[] {
   const manifestPath = path.join(corpusDir, 'export-failure-scenarios.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
     scenarios: ExportFailureScenario[];
   };
-  return manifest.scenarios;
+  return scenarioGrep
+    ? manifest.scenarios.filter((scenario) => scenarioGrep.test(scenario.id))
+    : manifest.scenarios;
 }
 
 for (const scenario of exportFailureScenarios()) {

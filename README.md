@@ -14,10 +14,14 @@ npm run corpus:create
 npm run dev
 npm run test:e2e
 npm run test:e2e:excel
+npm run test:pipeline -- --parallel 4
+npm run test:pipeline -- --parallel 4 --com
 ```
 
 `npm run test:e2e` runs the browser import/export flow and performs the Excel check when Excel is available. `npm run test:e2e:excel` requires Excel and fails if Excel is missing or automation cannot run.
 
 The macOS Excel check uses `osascript` plus `System Events` to inspect Excel windows for corruption or repair dialogs. macOS may require Accessibility permission for the terminal/Codex app that runs the tests.
 
-Current local result: Excel accepts `simple-formulas`, `formats-dates-merged`, and `multi-sheet-references` exports, but reports a repair/corruption dialog for `table-autofilter.mog-export.xlsx`.
+`npm run test:pipeline -- --parallel N` runs Mog import/edit/export in parallel, writes exported artifacts under `test-results/pipeline/exports`, then validates those artifacts with actual Excel. On macOS, Excel validation remains serialized because Excel and AppleScript dialogs are process-global. On Windows, `--com` switches validation to the COM/UI Automation checker and uses `--parallel N` as the COM validator concurrency.
+
+Current confirmed failure classes are table header metadata mismatches, dynamic array spill edits, and a workbook metadata relationship that imports but fails Mog export before any XLSX is produced.
