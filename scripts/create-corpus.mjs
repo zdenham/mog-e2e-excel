@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,14 +7,34 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const corpusDir = path.join(repoRoot, 'corpus');
 
-async function writeWorkbook(name, configure) {
+async function writeWorkbook(name, configure, postprocess) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'mog-e2e-excel';
   workbook.created = new Date('2026-01-01T00:00:00Z');
   workbook.modified = new Date('2026-01-01T00:00:00Z');
   await configure(workbook);
-  const buffer = await workbook.xlsx.writeBuffer();
-  await writeFile(path.join(corpusDir, name), Buffer.from(buffer));
+  let buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  if (postprocess) {
+    buffer = await postprocess(buffer);
+  }
+  await writeFile(path.join(corpusDir, name), buffer);
+}
+
+async function addUnusedHyperlinkRelationship(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const relPath = 'xl/worksheets/_rels/sheet1.xml.rels';
+  const relsFile = zip.file(relPath);
+  let relsXml = relsFile
+    ? await relsFile.async('string')
+    : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  if (!relsXml.includes('rIdAgent09Unused')) {
+    relsXml = relsXml.replace(
+      '</Relationships>',
+      '<Relationship Id="rIdAgent09Unused" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/stale-unused-relationship" TargetMode="External"/></Relationships>',
+    );
+    zip.file(relPath, relsXml);
+  }
+  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 async function simpleWorkbook(workbook) {
@@ -279,6 +300,77 @@ async function hyperlinkWorkbook(workbook) {
   };
 }
 
+async function hyperlinkExternalWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('ExternalLinks');
+  sheet.addRows([
+    ['Label', 'URL', 'Notes'],
+    ['OpenAI', 'https://openai.com', 'External link in A2'],
+    ['GitHub', 'https://github.com', 'External link in A3'],
+  ]);
+  sheet.getCell('A2').value = {
+    text: 'OpenAI',
+    hyperlink: 'https://openai.com',
+    tooltip: 'External HTTPS link',
+  };
+  sheet.getCell('A3').value = {
+    text: 'GitHub',
+    hyperlink: 'https://github.com',
+    tooltip: 'Second external HTTPS link',
+  };
+}
+
+async function hyperlinkInternalWorkbook(workbook) {
+  const links = workbook.addWorksheet('InternalLinks');
+  links.addRows([
+    ['Label', 'Destination', 'Notes'],
+    ['Jump to target', '#Targets!B2', 'Internal workbook link in A2'],
+    ['Jump to local cell', '#InternalLinks!A1', 'Internal same-sheet link in A3'],
+  ]);
+  links.getCell('A2').value = {
+    text: 'Jump to target',
+    hyperlink: '#Targets!B2',
+    tooltip: 'Internal link to Targets!B2',
+  };
+  links.getCell('A3').value = {
+    text: 'Jump to local cell',
+    hyperlink: '#InternalLinks!A1',
+    tooltip: 'Internal same-sheet link',
+  };
+
+  const targets = workbook.addWorksheet('Targets');
+  targets.addRows([
+    ['Key', 'Value'],
+    ['Target', 'Linked destination'],
+  ]);
+}
+
+async function hyperlinkMixedWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('MixedLinks');
+  sheet.addRows([
+    ['Label', 'Target', 'Notes'],
+    ['External', 'https://example.com/report?x=1&y=2', 'query string'],
+    ['Mailto', 'mailto:test@example.com?subject=Mog%20E2E', 'mailto relation'],
+    ['File URL', 'file:///tmp/mog-e2e-link-target.txt', 'file URL relation'],
+    ['Internal', '#MixedLinks!A1', 'internal location'],
+  ]);
+  sheet.getCell('A2').value = {
+    text: 'External query link',
+    hyperlink: 'https://example.com/report?x=1&y=2',
+  };
+  sheet.getCell('A3').value = {
+    text: 'Mail link',
+    hyperlink: 'mailto:test@example.com?subject=Mog%20E2E',
+  };
+  sheet.getCell('A4').value = {
+    text: 'File link',
+    hyperlink: 'file:///tmp/mog-e2e-link-target.txt',
+  };
+  sheet.getCell('A5').value = {
+    text: 'Internal link',
+    hyperlink: '#MixedLinks!A1',
+  };
+}
+
 async function definedNamesWorkbook(workbook) {
   const sheet = workbook.addWorksheet('Names');
   sheet.addRows([
@@ -356,6 +448,13 @@ const scenarios = [
     edit: 'table-header-blank-cell',
     expectedExcelStatus: 'corrupt',
     issue: 'blank visible table header while tableColumn metadata remains non-empty',
+  },
+  {
+    id: 'table-autofilter-header-number',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-number-cell',
+    expectedExcelStatus: 'corrupt',
+    issue: 'numeric visible table header while tableColumn metadata remains text',
   }
 ];
 
