@@ -1,0 +1,178 @@
+import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+
+function run(command, args, options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...options,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+    child.on('error', (error) =>
+      resolve({ code: 1, stdout, stderr: String(error.message ?? error) }),
+    );
+  });
+}
+
+async function assertReadableFile(filePath) {
+  await access(filePath, constants.R_OK);
+}
+
+async function hasExcel() {
+  const result = await run('osascript', ['-e', 'id of application "Microsoft Excel"']);
+  return result.code === 0;
+}
+
+async function checkWithExcel(filePath) {
+  const absoluteFilePath = path.resolve(filePath);
+  await assertReadableFile(absoluteFilePath);
+
+  if (process.platform !== 'darwin') {
+    return {
+      status: 'unsupported',
+      message: 'Actual Excel validation is currently implemented for macOS only.',
+    };
+  }
+
+  if (!(await hasExcel())) {
+    return {
+      status: 'skipped',
+      message: 'Microsoft Excel is not installed or is not discoverable by LaunchServices.',
+    };
+  }
+
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'mog-excel-check-'));
+  const scriptPath = path.join(tempDir, 'check-excel.applescript');
+  await writeFile(
+    scriptPath,
+    `
+on collectWindowText()
+  set collectedText to ""
+  tell application "System Events"
+    if exists process "Microsoft Excel" then
+      tell process "Microsoft Excel"
+        repeat with currentWindow in windows
+          try
+            set collectedText to collectedText & " " & (name of currentWindow as text)
+          end try
+          try
+            set collectedText to collectedText & " " & (value of static texts of currentWindow as text)
+          end try
+          try
+            set collectedText to collectedText & " " & (description of buttons of currentWindow as text)
+          end try
+        end repeat
+      end tell
+    end if
+  end tell
+  return collectedText
+end collectWindowText
+
+on dismissKnownDialogs()
+  tell application "System Events"
+    if exists process "Microsoft Excel" then
+      tell process "Microsoft Excel"
+        try
+          click button "No" of window 1
+        end try
+        try
+          click button "Cancel" of window 1
+        end try
+        try
+          click button "Don't Save" of window 1
+        end try
+        try
+          click button "OK" of window 1
+        end try
+        try
+          click button 2 of window 1
+        end try
+      end tell
+    end if
+  end tell
+end dismissKnownDialogs
+
+on run argv
+  set workbookPath to item 1 of argv
+  my dismissKnownDialogs()
+  try
+    do shell script "open -a " & quoted form of "Microsoft Excel" & " " & quoted form of workbookPath
+  on error errMsg number errNo
+    return "CORRUPT_OPEN_ERROR: " & errMsg
+  end try
+
+  delay 4
+  set dialogText to my collectWindowText()
+  set lowerDialogText to do shell script "printf %s " & quoted form of dialogText & " | tr '[:upper:]' '[:lower:]'"
+
+  if lowerDialogText contains "found a problem" or lowerDialogText contains "corrupt" or lowerDialogText contains "repair" or lowerDialogText contains "recovered" or lowerDialogText contains "unreadable content" then
+    my dismissKnownDialogs()
+    return "CORRUPT_DIALOG: " & dialogText
+  end if
+
+  tell application "Microsoft Excel"
+    try
+      close active workbook saving no
+    end try
+  end tell
+  return "OK"
+end run
+`,
+  );
+
+  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 12_000 });
+  const output = `${result.stdout}${result.stderr}`.trim();
+  if (result.code !== 0) {
+    if (output.toLowerCase().includes('not allowed assistive access')) {
+      return {
+        status: 'skipped',
+        message:
+          'Excel is installed, but macOS denied Accessibility automation access for osascript/System Events.',
+      };
+    }
+    if (result.signal) {
+      return {
+        status: 'skipped',
+        message: `Excel automation did not complete before timeout (${result.signal}).`,
+      };
+    }
+    return { status: 'error', message: output || 'osascript failed' };
+  }
+  if (output.startsWith('OK')) {
+    return { status: 'ok', message: output };
+  }
+  if (output.startsWith('CORRUPT_')) {
+    return { status: 'corrupt', message: output };
+  }
+  return { status: 'error', message: output || 'Unexpected empty Excel check output' };
+}
+
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
+const modulePath = path.resolve(fileURLToPath(import.meta.url));
+
+if (invokedPath === modulePath) {
+  const filePath = process.argv[2];
+  if (!filePath) {
+    console.error('Usage: npm run excel:check -- /absolute/path/to/workbook.xlsx');
+    process.exit(2);
+  }
+  const result = await checkWithExcel(filePath);
+  console.log(JSON.stringify(result, null, 2));
+  if (result.status === 'corrupt' || result.status === 'error') {
+    process.exit(1);
+  }
+}
+
+export { checkWithExcel };

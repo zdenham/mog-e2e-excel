@@ -1,0 +1,41 @@
+{
+  "name": "mog-e2e-excel",
+  "version": "1.0.0",
+  "description": "End-to-end import/export validation harness for Mog XLSX files.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "corpus:create": "node scripts/create-corpus.mjs",
+    "test": "npm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:excel": "REQUIRE_EXCEL=1 playwright test tests/mog-excel.spec.ts",
+    "excel:check": "node scripts/check-excel.mjs"
+  },
+  "keywords": [
+    "mog",
+    "excel",
+    "xlsx",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@mog-sdk/spreadsheet-app": "^0.6.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^1.16.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3"
+  }
+}
