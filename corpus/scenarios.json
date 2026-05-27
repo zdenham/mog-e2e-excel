@@ -56,6 +56,13 @@
       "edit": "table-header-offset-row",
       "expectedExcelStatus": "corrupt",
       "issue": "non-A1 table header cells changed while tableColumn metadata keeps old names"
+    },
+    {
+      "id": "two-tables-second-header-row",
+      "file": "two-tables.xlsx",
+      "edit": "table-second-header-row",
+      "expectedExcelStatus": "corrupt",
+      "issue": "second table header cells changed while that table part keeps old tableColumn names"
     }
   ]
 }
