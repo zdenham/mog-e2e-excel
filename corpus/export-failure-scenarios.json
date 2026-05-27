@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "scenarios": [
+    {
+      "id": "google-workbook-metadata-target",
+      "file": "pv23-is-only-30-min-3-statements-model.xlsx",
+      "expectedExportStatus": "error",
+      "expectedMessage": "Package integrity error: relationship rId5 in xl/_rels/workbook.xml.rels targets missing part xl/metadata from target metadata",
+      "issue": "valid workbook imports, but export fails because a Google workbookmetadata relationship targets xl/metadata without an .xml part name"
+    }
+  ]
+}
