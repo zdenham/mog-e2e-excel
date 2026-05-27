@@ -84,6 +84,41 @@
       "edit": "table-header-row-values",
       "expectedExcelStatus": "corrupt",
       "issue": "table with special original headers has visible header cells changed while tableColumn names remain stale"
+    },
+    {
+      "id": "formula-shared-child-overwrite",
+      "file": "shared-formulas.xlsx",
+      "edit": "shared-formula-child-cell",
+      "expectedExcelStatus": "ok",
+      "issue": "shared formula range child overwritten after import/export"
+    },
+    {
+      "id": "formula-legacy-array-input-edit",
+      "file": "legacy-array-formula.xlsx",
+      "edit": "legacy-array-input-cell",
+      "expectedExcelStatus": "ok",
+      "issue": "legacy array formula dependency cells edited after import/export"
+    },
+    {
+      "id": "formula-dynamic-array-spill-block",
+      "file": "dynamic-array-formula.xlsx",
+      "edit": "dynamic-array-spill-cell",
+      "expectedExcelStatus": "corrupt",
+      "issue": "dynamic array formula is exported with a #SPILL! cached error after a spill-range edit, triggering Excel repair"
+    },
+    {
+      "id": "formula-cache-overwrite",
+      "file": "formula-cache-values.xlsx",
+      "edit": "formula-cache-cell",
+      "expectedExcelStatus": "ok",
+      "issue": "formula cached value and formula result types after edit/export"
+    },
+    {
+      "id": "formula-calc-chain-overwrite",
+      "file": "calc-chain.xlsx",
+      "edit": "calc-chain-formula-cell",
+      "expectedExcelStatus": "ok",
+      "issue": "calcChain package part preserved or updated after formula overwrite"
     }
   ]
 }

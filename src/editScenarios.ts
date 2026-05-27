@@ -21,7 +21,12 @@ export type EditScenarioId =
   | 'hyperlink-cell'
   | 'defined-name-cell'
   | 'hidden-row-cell'
-  | 'formula-cell';
+  | 'formula-cell'
+  | 'shared-formula-child-cell'
+  | 'legacy-array-input-cell'
+  | 'dynamic-array-spill-cell'
+  | 'formula-cache-cell'
+  | 'calc-chain-formula-cell';
 
 async function setHeaderRow(
   workbook: Workbook,
@@ -124,6 +129,26 @@ export async function applyEditScenario(workbook: Workbook, scenarioId: string) 
       case 'formula-cell':
         await sheet.setCell('C2', '=A2+B2');
         await sheet.setCell('D2', '=SUM(A2:C2)');
+        return;
+      case 'shared-formula-child-cell':
+        await sheet.setCell('D3', '=B3*C3+1');
+        await sheet.setCell('B4', 66);
+        return;
+      case 'legacy-array-input-cell':
+        await sheet.setCell('A3', 20);
+        await sheet.setCell('B5', 400);
+        return;
+      case 'dynamic-array-spill-cell':
+        await sheet.setCell('C3', 'blocks spill');
+        await sheet.setCell('A2', 10);
+        return;
+      case 'formula-cache-cell':
+        await sheet.setCell('C2', '=A2-B2');
+        await sheet.setCell('D2', '=TEXT(C2,"0")');
+        return;
+      case 'calc-chain-formula-cell':
+        await sheet.setCell('C3', '=A3*B3');
+        await sheet.setCell('D3', '=C3+100');
         return;
       default:
         throw new Error(`Unknown edit scenario: ${scenarioId}`);

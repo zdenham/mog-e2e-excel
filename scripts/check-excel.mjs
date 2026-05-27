@@ -101,6 +101,8 @@ async function checkWithExcel(filePath) {
   let releaseLock;
   try {
     releaseLock = await acquireExcelLock();
+    await run('pkill', ['-x', 'Microsoft Excel']);
+    await sleep(1000);
 
     const tempDir = await mkdtemp(path.join(tmpdir(), 'mog-excel-check-'));
     const scriptPath = path.join(tempDir, 'check-excel.applescript');
@@ -155,27 +157,28 @@ end dismissKnownDialogs
 
 on run argv
   set workbookPath to item 1 of argv
+  set workbookName to do shell script "basename " & quoted form of workbookPath
+  set lowerWorkbookName to do shell script "printf %s " & quoted form of workbookName & " | tr '[:upper:]' '[:lower:]'"
   my dismissKnownDialogs()
-  tell application "Microsoft Excel"
-    try
-      quit saving no
-    end try
-  end tell
-  delay 1
   try
     do shell script "open -a " & quoted form of "Microsoft Excel" & " " & quoted form of workbookPath
   on error errMsg number errNo
     return "CORRUPT_OPEN_ERROR: " & errMsg
   end try
 
-  repeat with pollIndex from 1 to 20
+  repeat with pollIndex from 1 to 45
     delay 1
     set dialogText to my collectWindowText()
     set lowerDialogText to do shell script "printf %s " & quoted form of dialogText & " | tr '[:upper:]' '[:lower:]'"
 
     if lowerDialogText contains "found a problem" or lowerDialogText contains "corrupt" or lowerDialogText contains "repair" or lowerDialogText contains "recovered" or lowerDialogText contains "unreadable content" then
+      if lowerDialogText does not contain lowerWorkbookName then
+        my dismissKnownDialogs()
+        delay 1
+      else
       my dismissKnownDialogs()
       return "CORRUPT_DIALOG: " & dialogText
+      end if
     end if
   end repeat
 
@@ -189,7 +192,7 @@ end run
 `,
     );
 
-    const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 45_000 });
+    const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 90_000 });
     const output = `${result.stdout}${result.stderr}`.trim();
     if (result.code !== 0) {
       if (output.toLowerCase().includes('not allowed assistive access')) {

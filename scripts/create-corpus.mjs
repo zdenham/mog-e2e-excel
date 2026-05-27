@@ -37,6 +37,42 @@ async function addUnusedHyperlinkRelationship(buffer) {
   return zip.generateAsync({ type: 'nodebuffer' });
 }
 
+async function addCalcChainPackageParts(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const contentTypes = await zip.file('[Content_Types].xml').async('string');
+  if (!contentTypes.includes('/xl/calcChain.xml')) {
+    zip.file(
+      '[Content_Types].xml',
+      contentTypes.replace(
+        '</Types>',
+        '<Override PartName="/xl/calcChain.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml"/></Types>',
+      ),
+    );
+  }
+
+  const rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  if (!rels.includes('relationships/calcChain')) {
+    const nextId =
+      Math.max(
+        0,
+        ...[...rels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1])),
+      ) + 1;
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      rels.replace(
+        '</Relationships>',
+        `<Relationship Id="rId${nextId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain" Target="calcChain.xml"/></Relationships>`,
+      ),
+    );
+  }
+
+  zip.file(
+    'xl/calcChain.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><c r="C2" i="1"/><c r="D2"/><c r="C3"/><c r="D3"/><c r="C4"/><c r="D4"/></calcChain>',
+  );
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
 async function simpleWorkbook(workbook) {
   const sheet = workbook.addWorksheet('Inputs');
   sheet.columns = [
@@ -413,6 +449,74 @@ async function formulaWorkbook(workbook) {
   ]);
 }
 
+async function sharedFormulaWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('SharedFormulas');
+  sheet.addRow(['SKU', 'Units', 'Price', 'Amount']);
+  [
+    ['A-100', 2, 10],
+    ['B-205', 4, 12],
+    ['C-310', 6, 15],
+    ['D-420', 8, 20],
+    ['E-505', 10, 25],
+  ].forEach((row) => sheet.addRow(row));
+  sheet.fillFormula('D2:D6', 'B2*C2', [20, 48, 90, 160, 250], 'shared');
+}
+
+async function legacyArrayFormulaWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('LegacyArray');
+  sheet.addRow(['A', 'B', 'Array Sum']);
+  [
+    [1, 10],
+    [2, 20],
+    [3, 30],
+    [4, 40],
+  ].forEach((row) => sheet.addRow(row));
+  sheet.fillFormula('C2:C5', 'A2:A5+B2:B5', [11, 22, 33, 44], 'array');
+}
+
+async function dynamicArrayWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('DynamicArray');
+  sheet.addRows([
+    ['Seed', 'Label', 'Spill'],
+    [1, 'sequence', { formula: 'SEQUENCE(4,1,A2,1)', result: 1 }],
+    [2, null, null],
+    [3, null, null],
+    [4, null, null],
+  ]);
+}
+
+async function formulaCacheWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('FormulaCache');
+  sheet.addRows([
+    ['A', 'B', 'Formula with stale cache', 'Text formula cache', 'Error formula cache'],
+    [
+      10,
+      5,
+      { formula: 'A2+B2', result: 999 },
+      { formula: 'TEXT(A2,"0")', result: 'stale' },
+      { formula: '1/0', result: { error: '#DIV/0!' } },
+    ],
+    [
+      20,
+      2,
+      { formula: 'A3/B3', result: 10 },
+      { formula: 'CONCAT("row-",A3)', result: 'row-20' },
+      { formula: 'NA()', result: { error: '#N/A' } },
+    ],
+  ]);
+  sheet.getCell('G2').value = { formula: 'SUM(C2:C3)', result: 1009 };
+}
+
+async function calcChainWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('CalcChain');
+  sheet.addRows([
+    ['A', 'B', 'Formula', 'Dependent Formula'],
+    [1, 2, { formula: 'A2+B2', result: 3 }, { formula: 'C2*10', result: 30 }],
+    [3, 4, { formula: 'A3+B3', result: 7 }, { formula: 'C3*10', result: 70 }],
+    [5, 6, { formula: 'A4+B4', result: 11 }, { formula: 'C4*10', result: 110 }],
+  ]);
+}
+
 const scenarios = [
   {
     id: 'table-autofilter-header-row',
@@ -497,6 +601,41 @@ const scenarios = [
     edit: 'table-header-row-values',
     expectedExcelStatus: 'corrupt',
     issue: 'table with special original headers has visible header cells changed while tableColumn names remain stale',
+  },
+  {
+    id: 'formula-shared-child-overwrite',
+    file: 'shared-formulas.xlsx',
+    edit: 'shared-formula-child-cell',
+    expectedExcelStatus: 'ok',
+    issue: 'shared formula range child overwritten after import/export',
+  },
+  {
+    id: 'formula-legacy-array-input-edit',
+    file: 'legacy-array-formula.xlsx',
+    edit: 'legacy-array-input-cell',
+    expectedExcelStatus: 'ok',
+    issue: 'legacy array formula dependency cells edited after import/export',
+  },
+  {
+    id: 'formula-dynamic-array-spill-block',
+    file: 'dynamic-array-formula.xlsx',
+    edit: 'dynamic-array-spill-cell',
+    expectedExcelStatus: 'corrupt',
+    issue: 'dynamic array formula is exported with a #SPILL! cached error after a spill-range edit, triggering Excel repair',
+  },
+  {
+    id: 'formula-cache-overwrite',
+    file: 'formula-cache-values.xlsx',
+    edit: 'formula-cache-cell',
+    expectedExcelStatus: 'ok',
+    issue: 'formula cached value and formula result types after edit/export',
+  },
+  {
+    id: 'formula-calc-chain-overwrite',
+    file: 'calc-chain.xlsx',
+    edit: 'calc-chain-formula-cell',
+    expectedExcelStatus: 'ok',
+    issue: 'calcChain package part preserved or updated after formula overwrite',
   }
 ];
 
@@ -517,6 +656,11 @@ await writeWorkbook('defined-names.xlsx', definedNamesWorkbook);
 await writeWorkbook('merged-cells.xlsx', mergedCellsWorkbook);
 await writeWorkbook('hidden-outline.xlsx', hiddenOutlineWorkbook);
 await writeWorkbook('formulas.xlsx', formulaWorkbook);
+await writeWorkbook('shared-formulas.xlsx', sharedFormulaWorkbook);
+await writeWorkbook('legacy-array-formula.xlsx', legacyArrayFormulaWorkbook);
+await writeWorkbook('dynamic-array-formula.xlsx', dynamicArrayWorkbook);
+await writeWorkbook('formula-cache-values.xlsx', formulaCacheWorkbook);
+await writeWorkbook('calc-chain.xlsx', calcChainWorkbook, addCalcChainPackageParts);
 await writeFile(
   path.join(corpusDir, 'scenarios.json'),
   JSON.stringify({ generatedAt: '2026-01-01T00:00:00.000Z', scenarios }, null, 2) + '\n',
