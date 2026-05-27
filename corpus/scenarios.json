@@ -7,6 +7,13 @@
       "edit": "table-header-row-values",
       "expectedExcelStatus": "corrupt",
       "issue": "table header cells changed but xl/tables/table1.xml keeps old tableColumn names"
+    },
+    {
+      "id": "table-autofilter-header-a1-only",
+      "file": "table-autofilter.xlsx",
+      "edit": "table-header-a1-only",
+      "expectedExcelStatus": "corrupt",
+      "issue": "single table header cell changed without tableColumn metadata update"
     }
   ]
 }
