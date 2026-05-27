@@ -1,9 +1,17 @@
-import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+
+const excelLockDir = path.join(tmpdir(), 'mog-excel-check.lock');
+const lockWaitMs = 180_000;
+const staleLockMs = 300_000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolve) => {
@@ -35,6 +43,43 @@ async function hasExcel() {
   return result.code === 0;
 }
 
+async function acquireExcelLock() {
+  const deadline = Date.now() + lockWaitMs;
+
+  while (Date.now() < deadline) {
+    try {
+      await mkdir(excelLockDir);
+      await writeFile(
+        path.join(excelLockDir, 'owner.txt'),
+        `${process.pid} ${new Date().toISOString()}\n`,
+      );
+      return async () => {
+        await rm(excelLockDir, { recursive: true, force: true });
+      };
+    } catch (error) {
+      if (error?.code !== 'EEXIST') {
+        throw error;
+      }
+
+      try {
+        const lockStats = await stat(excelLockDir);
+        if (Date.now() - lockStats.mtimeMs > staleLockMs) {
+          await rm(excelLockDir, { recursive: true, force: true });
+          continue;
+        }
+      } catch (statError) {
+        if (statError?.code === 'ENOENT') {
+          continue;
+        }
+      }
+
+      await sleep(500);
+    }
+  }
+
+  throw new Error('Timed out waiting for the Excel automation lock.');
+}
+
 async function checkWithExcel(filePath) {
   const absoluteFilePath = path.resolve(filePath);
   await assertReadableFile(absoluteFilePath);
@@ -53,11 +98,15 @@ async function checkWithExcel(filePath) {
     };
   }
 
-  const tempDir = await mkdtemp(path.join(tmpdir(), 'mog-excel-check-'));
-  const scriptPath = path.join(tempDir, 'check-excel.applescript');
-  await writeFile(
-    scriptPath,
-    `
+  let releaseLock;
+  try {
+    releaseLock = await acquireExcelLock();
+
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'mog-excel-check-'));
+    const scriptPath = path.join(tempDir, 'check-excel.applescript');
+    await writeFile(
+      scriptPath,
+      `
 on collectWindowText()
   set collectedText to ""
   tell application "System Events"
@@ -138,33 +187,40 @@ on run argv
   return "OK"
 end run
 `,
-  );
+    );
 
-  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 45_000 });
-  const output = `${result.stdout}${result.stderr}`.trim();
-  if (result.code !== 0) {
-    if (output.toLowerCase().includes('not allowed assistive access')) {
-      return {
-        status: 'skipped',
-        message:
-          'Excel is installed, but macOS denied Accessibility automation access for osascript/System Events.',
-      };
+    const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 45_000 });
+    const output = `${result.stdout}${result.stderr}`.trim();
+    if (result.code !== 0) {
+      if (output.toLowerCase().includes('not allowed assistive access')) {
+        return {
+          status: 'skipped',
+          message:
+            'Excel is installed, but macOS denied Accessibility automation access for osascript/System Events.',
+        };
+      }
+      if (result.signal) {
+        return {
+          status: 'skipped',
+          message: `Excel automation did not complete before timeout (${result.signal}).`,
+        };
+      }
+      return { status: 'error', message: output || 'osascript failed' };
     }
-    if (result.signal) {
-      return {
-        status: 'skipped',
-        message: `Excel automation did not complete before timeout (${result.signal}).`,
-      };
+    if (output.startsWith('OK')) {
+      return { status: 'ok', message: output };
     }
-    return { status: 'error', message: output || 'osascript failed' };
+    if (output.startsWith('CORRUPT_')) {
+      return { status: 'corrupt', message: output };
+    }
+    return { status: 'error', message: output || 'Unexpected empty Excel check output' };
+  } catch (error) {
+    return { status: 'error', message: String(error?.message ?? error) };
+  } finally {
+    if (releaseLock) {
+      await releaseLock();
+    }
   }
-  if (output.startsWith('OK')) {
-    return { status: 'ok', message: output };
-  }
-  if (output.startsWith('CORRUPT_')) {
-    return { status: 'corrupt', message: output };
-  }
-  return { status: 'error', message: output || 'Unexpected empty Excel check output' };
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
