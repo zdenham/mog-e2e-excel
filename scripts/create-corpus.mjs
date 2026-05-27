@@ -106,10 +106,251 @@ async function tableWorkbook(workbook) {
   sheet.getColumn(4).numFmt = '$#,##0';
 }
 
+async function tableNoTotalsWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('TableNoTotals');
+  sheet.addTable({
+    name: 'NoTotalsTable',
+    ref: 'A1',
+    headerRow: true,
+    totalsRow: false,
+    style: { theme: 'TableStyleMedium4', showRowStripes: true },
+    columns: [
+      { name: 'SKU', filterButton: true },
+      { name: 'Category', filterButton: true },
+      { name: 'Units', filterButton: true },
+      { name: 'Amount', filterButton: true },
+    ],
+    rows: [
+      ['A-100', 'Hardware', 20, 1200],
+      ['B-205', 'Software', 5, 3750],
+      ['C-310', 'Services', 9, 8100],
+    ],
+  });
+}
+
+async function tableStructuredFormulaWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Structured');
+  sheet.addTable({
+    name: 'StructuredSales',
+    ref: 'A1',
+    headerRow: true,
+    totalsRow: true,
+    style: { theme: 'TableStyleMedium9', showRowStripes: true },
+    columns: [
+      { name: 'SKU', filterButton: true },
+      { name: 'Units', filterButton: true, totalsRowFunction: 'sum' },
+      { name: 'Price', filterButton: true },
+      { name: 'Amount', filterButton: true, totalsRowFunction: 'sum' },
+    ],
+    rows: [
+      ['A-100', 20, 60, { formula: 'B2*C2', result: 1200 }],
+      ['B-205', 5, 750, { formula: 'B3*C3', result: 3750 }],
+      ['C-310', 9, 900, { formula: 'B4*C4', result: 8100 }],
+    ],
+  });
+  sheet.getColumn(4).numFmt = '$#,##0';
+}
+
+async function tableSpecialHeadersWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('SpecialHeaders');
+  sheet.addTable({
+    name: 'SpecialHeaderTable',
+    ref: 'A1',
+    headerRow: true,
+    totalsRow: true,
+    style: { theme: 'TableStyleLight11', showRowStripes: true },
+    columns: [
+      { name: 'Item #', filterButton: true },
+      { name: 'Region/Team', filterButton: true },
+      { name: 'Units Sold', filterButton: true, totalsRowFunction: 'sum' },
+      { name: 'Net $', filterButton: true, totalsRowFunction: 'sum' },
+    ],
+    rows: [
+      ['A-100', 'North', 20, 1200],
+      ['B-205', 'South', 5, 3750],
+      ['C-310', 'West', 9, 8100],
+    ],
+  });
+}
+
+async function tableOffsetWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('OffsetTable');
+  sheet.getCell('A1').value = 'Preamble outside the table';
+  sheet.addTable({
+    name: 'OffsetSales',
+    ref: 'B2',
+    headerRow: true,
+    totalsRow: true,
+    style: { theme: 'TableStyleMedium6', showRowStripes: true },
+    columns: [
+      { name: 'SKU', filterButton: true },
+      { name: 'Category', filterButton: true },
+      { name: 'Units', filterButton: true, totalsRowFunction: 'sum' },
+      { name: 'Amount', filterButton: true, totalsRowFunction: 'sum' },
+    ],
+    rows: [
+      ['A-100', 'Hardware', 20, 1200],
+      ['B-205', 'Software', 5, 3750],
+      ['C-310', 'Services', 9, 8100],
+    ],
+  });
+}
+
+async function twoTablesWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('TwoTables');
+  sheet.addTable({
+    name: 'LeftSales',
+    ref: 'A1',
+    headerRow: true,
+    totalsRow: false,
+    style: { theme: 'TableStyleMedium2', showRowStripes: true },
+    columns: [
+      { name: 'Left SKU', filterButton: true },
+      { name: 'Left Units', filterButton: true },
+      { name: 'Left Amount', filterButton: true },
+    ],
+    rows: [
+      ['L-1', 2, 20],
+      ['L-2', 4, 40],
+    ],
+  });
+  sheet.addTable({
+    name: 'RightSales',
+    ref: 'F1',
+    headerRow: true,
+    totalsRow: false,
+    style: { theme: 'TableStyleMedium3', showRowStripes: true },
+    columns: [
+      { name: 'Right SKU', filterButton: true },
+      { name: 'Right Units', filterButton: true },
+      { name: 'Right Amount', filterButton: true },
+    ],
+    rows: [
+      ['R-1', 3, 30],
+      ['R-2', 6, 60],
+    ],
+  });
+}
+
+async function autofilterOnlyWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('AutoFilterOnly');
+  sheet.addRows([
+    ['SKU', 'Category', 'Units', 'Amount'],
+    ['A-100', 'Hardware', 20, 1200],
+    ['B-205', 'Software', 5, 3750],
+    ['C-310', 'Services', 9, 8100],
+  ]);
+  sheet.autoFilter = 'A1:D4';
+}
+
+async function dataValidationWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Validation');
+  sheet.addRows([
+    ['Item', 'Status', 'Score'],
+    ['A-100', 'Open', 10],
+    ['B-205', 'Closed', 20],
+  ]);
+  sheet.getCell('B2').dataValidation = {
+    type: 'list',
+    allowBlank: false,
+    formulae: ['"Open,Closed,Blocked"'],
+  };
+  sheet.getCell('C2').dataValidation = {
+    type: 'whole',
+    operator: 'between',
+    formulae: [1, 100],
+  };
+}
+
+async function hyperlinkWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Links');
+  sheet.addRows([
+    ['Label', 'URL'],
+    ['Mog', 'https://github.com/fundamental-research-labs/mog'],
+  ]);
+  sheet.getCell('A2').value = {
+    text: 'Mog repository',
+    hyperlink: 'https://github.com/fundamental-research-labs/mog',
+    tooltip: 'Open Mog on GitHub',
+  };
+  sheet.getCell('B2').value = {
+    text: 'Internal target',
+    hyperlink: '#Links!A1',
+  };
+}
+
+async function definedNamesWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Names');
+  sheet.addRows([
+    ['Metric', 'Value', 'Formula'],
+    ['NamedInput', 100, { formula: 'NamedInput*2' }],
+  ]);
+  workbook.definedNames.add('Names!$B$2', 'NamedInput');
+}
+
+async function mergedCellsWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Merged');
+  sheet.mergeCells('A1:D1');
+  sheet.getCell('A1').value = 'Merged title';
+  sheet.addRows([
+    [],
+    ['Item', 'Units', 'Price', 'Amount'],
+    ['A-100', 2, 10, { formula: 'B4*C4' }],
+  ]);
+}
+
+async function hiddenOutlineWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('HiddenOutline');
+  sheet.addRows([
+    ['Item', 'Units'],
+    ['Visible', 1],
+    ['Hidden row', 2],
+    ['Grouped row', 3],
+    ['Visible tail', 4],
+  ]);
+  sheet.getRow(3).hidden = true;
+  sheet.getRow(4).outlineLevel = 1;
+  sheet.getColumn(2).hidden = true;
+}
+
+async function formulaWorkbook(workbook) {
+  const sheet = workbook.addWorksheet('Formulas');
+  sheet.addRows([
+    ['A', 'B', 'C', 'D'],
+    [1, 2, { formula: 'A2+B2', result: 3 }, { formula: 'SUM(A2:C2)', result: 6 }],
+  ]);
+}
+
+const scenarios = [
+  {
+    id: 'table-autofilter-header-row',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-row-values',
+    expectedExcelStatus: 'corrupt',
+    issue: 'table header cells changed but xl/tables/table1.xml keeps old tableColumn names',
+  }
+];
+
 await mkdir(corpusDir, { recursive: true });
 await writeWorkbook('simple-formulas.xlsx', simpleWorkbook);
 await writeWorkbook('formats-dates-merged.xlsx', formattedWorkbook);
 await writeWorkbook('multi-sheet-references.xlsx', multiSheetWorkbook);
 await writeWorkbook('table-autofilter.xlsx', tableWorkbook);
+await writeWorkbook('table-no-totals.xlsx', tableNoTotalsWorkbook);
+await writeWorkbook('table-structured-formulas.xlsx', tableStructuredFormulaWorkbook);
+await writeWorkbook('table-special-headers.xlsx', tableSpecialHeadersWorkbook);
+await writeWorkbook('table-offset.xlsx', tableOffsetWorkbook);
+await writeWorkbook('two-tables.xlsx', twoTablesWorkbook);
+await writeWorkbook('autofilter-only.xlsx', autofilterOnlyWorkbook);
+await writeWorkbook('data-validation.xlsx', dataValidationWorkbook);
+await writeWorkbook('hyperlinks.xlsx', hyperlinkWorkbook);
+await writeWorkbook('defined-names.xlsx', definedNamesWorkbook);
+await writeWorkbook('merged-cells.xlsx', mergedCellsWorkbook);
+await writeWorkbook('hidden-outline.xlsx', hiddenOutlineWorkbook);
+await writeWorkbook('formulas.xlsx', formulaWorkbook);
+await writeFile(
+  path.join(corpusDir, 'scenarios.json'),
+  JSON.stringify({ generatedAt: '2026-01-01T00:00:00.000Z', scenarios }, null, 2) + '\n',
+);
 
 console.log(`Wrote XLSX corpus to ${corpusDir}`);

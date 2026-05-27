@@ -107,13 +107,19 @@ end dismissKnownDialogs
 on run argv
   set workbookPath to item 1 of argv
   my dismissKnownDialogs()
+  tell application "Microsoft Excel"
+    try
+      quit saving no
+    end try
+  end tell
+  delay 1
   try
     do shell script "open -a " & quoted form of "Microsoft Excel" & " " & quoted form of workbookPath
   on error errMsg number errNo
     return "CORRUPT_OPEN_ERROR: " & errMsg
   end try
 
-  delay 4
+  delay 8
   set dialogText to my collectWindowText()
   set lowerDialogText to do shell script "printf %s " & quoted form of dialogText & " | tr '[:upper:]' '[:lower:]'"
 
@@ -132,7 +138,7 @@ end run
 `,
   );
 
-  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 12_000 });
+  const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 30_000 });
   const output = `${result.stdout}${result.stderr}`.trim();
   if (result.code !== 0) {
     if (output.toLowerCase().includes('not allowed assistive access')) {

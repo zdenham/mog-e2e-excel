@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "scenarios": [
+    {
+      "id": "table-autofilter-header-row",
+      "file": "table-autofilter.xlsx",
+      "edit": "table-header-row-values",
+      "expectedExcelStatus": "corrupt",
+      "issue": "table header cells changed but xl/tables/table1.xml keeps old tableColumn names"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ import {
 } from '@mog-sdk/spreadsheet-app';
 import type { Workbook } from '@mog-sdk/contracts/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { applyEditScenario } from './editScenarios';
 
 type LoadedFile = {
   id: string;
@@ -41,6 +42,7 @@ type HarnessApi = {
   loadFile: (file: File) => Promise<void>;
   exportXlsx: () => Promise<Uint8Array>;
   applyEdit: () => Promise<void>;
+  applyScenarioEdit: (scenarioId: string) => Promise<void>;
   getStatus: () => string;
 };
 
@@ -208,12 +210,15 @@ export function App() {
       throw new Error('No workbook is loaded.');
     }
     const workbookApi = current.workbook.getWorkbook();
-    await workbookApi.batch('E2E harness edit', async (workbook: Workbook) => {
-      const sheet = workbook.activeSheet;
-      await sheet.setCell('A1', 'Mog E2E export smoke test');
-      await sheet.setCell('B1', new Date().toISOString());
-      await sheet.setCell('C1', '=LEN(A1)');
-    });
+    await applyEditScenario(workbookApi as Workbook, 'smoke-header-edit');
+  }, []);
+
+  const applyNamedEdit = useCallback(async (scenarioId: string) => {
+    const current = stateRef.current;
+    if (current.status !== 'ready') {
+      throw new Error('No workbook is loaded.');
+    }
+    await applyEditScenario(current.workbook.getWorkbook() as Workbook, scenarioId);
   }, []);
 
   useEffect(() => {
@@ -221,12 +226,13 @@ export function App() {
       loadFile,
       exportXlsx,
       applyEdit,
+      applyScenarioEdit: applyNamedEdit,
       getStatus: () => stateRef.current.status,
     };
     return () => {
       delete window.__mogHarness;
     };
-  }, [applyEdit, exportXlsx, loadFile]);
+  }, [applyEdit, applyNamedEdit, exportXlsx, loadFile]);
 
   const statusLabel = useMemo(() => {
     if (state.status === 'idle') return 'No workbook loaded';

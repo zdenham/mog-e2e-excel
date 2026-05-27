@@ -1,12 +1,20 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 type ExcelCheckResult = {
   status: 'ok' | 'corrupt' | 'error' | 'skipped' | 'unsupported';
   message: string;
+};
+
+type CorpusScenario = {
+  id: string;
+  file: string;
+  edit: string;
+  expectedExcelStatus: 'ok' | 'corrupt';
+  issue: string;
 };
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,17 +37,18 @@ async function checkWithExcel(filePath: string): Promise<ExcelCheckResult> {
   }
 }
 
-function corpusFiles(): string[] {
+function corpusScenarios(): CorpusScenario[] {
   if (!existsSync(corpusDir)) {
     execFileSync('npm', ['run', 'corpus:create'], {
       cwd: repoRoot,
       stdio: 'inherit',
     });
   }
-  return readdirSync(corpusDir)
-    .filter((file) => file.endsWith('.xlsx'))
-    .sort()
-    .map((file) => path.join(corpusDir, file));
+  const manifestPath = path.join(corpusDir, 'scenarios.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    scenarios: CorpusScenario[];
+  };
+  return manifest.scenarios;
 }
 
 test.beforeAll(() => {
@@ -50,10 +59,11 @@ test.beforeAll(() => {
   });
 });
 
-for (const filePath of corpusFiles()) {
-  const fileName = path.basename(filePath);
+for (const scenario of corpusScenarios()) {
+  const fileName = scenario.file;
+  const filePath = path.join(corpusDir, fileName);
 
-  test(`imports, edits, exports, and opens in Excel: ${fileName}`, async ({
+  test(`scenario ${scenario.id}: ${fileName} -> ${scenario.expectedExcelStatus}`, async ({
     page,
   }, testInfo) => {
     await page.goto('/');
@@ -62,13 +72,18 @@ for (const filePath of corpusFiles()) {
     await expect(page.getByTestId('status')).toContainText(/Loaded/);
     await expect(page.getByTestId('loaded-file')).toContainText(fileName);
 
-    await page.getByTestId('apply-edit').click();
+    await page.evaluate(async (editId) => {
+      if (!window.__mogHarness?.applyScenarioEdit) {
+        throw new Error('Mog E2E harness did not expose applyScenarioEdit.');
+      }
+      await window.__mogHarness.applyScenarioEdit(editId);
+    }, scenario.edit);
     await expect(page.getByTestId('status')).toContainText(/dirty|clean/);
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByTestId('export-xlsx').click();
     const download = await downloadPromise;
-    const exportedPath = path.join(downloadsDir, `${path.parse(fileName).name}.mog-export.xlsx`);
+    const exportedPath = path.join(downloadsDir, `${scenario.id}.mog-export.xlsx`);
     await download.saveAs(exportedPath);
 
     expect(statSync(exportedPath).size).toBeGreaterThan(0);
@@ -76,7 +91,7 @@ for (const filePath of corpusFiles()) {
     const result = await checkWithExcel(exportedPath);
     testInfo.annotations.push({
       type: 'excel-check',
-      description: `${result.status}: ${result.message}`,
+      description: `${scenario.issue}: ${result.status}: ${result.message}`,
     });
 
     if (result.status === 'skipped' || result.status === 'unsupported') {
@@ -86,6 +101,6 @@ for (const filePath of corpusFiles()) {
       return;
     }
 
-    expect(result.status, result.message).toBe('ok');
+    expect(result.status, result.message).toBe(scenario.expectedExcelStatus);
   });
 }
