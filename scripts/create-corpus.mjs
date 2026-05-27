@@ -335,6 +335,13 @@ const scenarios = [
     edit: 'table-header-a1-only',
     expectedExcelStatus: 'corrupt',
     issue: 'single table header cell changed without tableColumn metadata update',
+  },
+  {
+    id: 'table-autofilter-header-formula',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-formula-cell',
+    expectedExcelStatus: 'corrupt',
+    issue: 'formula written into table header while tableColumn metadata remains string header',
   }
 ];
 
