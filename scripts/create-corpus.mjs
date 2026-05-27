@@ -342,6 +342,13 @@ const scenarios = [
     edit: 'table-header-formula-cell',
     expectedExcelStatus: 'corrupt',
     issue: 'formula written into table header while tableColumn metadata remains string header',
+  },
+  {
+    id: 'table-autofilter-header-duplicate',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-duplicate-cell',
+    expectedExcelStatus: 'corrupt',
+    issue: 'duplicate visible table header while tableColumn metadata remains unique',
   }
 ];
 

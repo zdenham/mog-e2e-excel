@@ -3,8 +3,13 @@ import type { Workbook } from '@mog-sdk/contracts/api';
 export type EditScenarioId =
   | 'smoke-header-edit'
   | 'table-header-a1-only'
+  | 'table-header-all-strings'
+  | 'table-header-blank-cell'
+  | 'table-header-duplicate-cell'
   | 'table-header-row-values'
   | 'table-header-formula-cell'
+  | 'table-header-number-cell'
+  | 'table-header-special-chars'
   | 'table-header-offset-row'
   | 'table-second-header-row'
   | 'table-data-row'
@@ -53,8 +58,28 @@ export async function applyEditScenario(workbook: Workbook, scenarioId: string) 
       case 'table-header-a1-only':
         await sheet.setCell('A1', 'Mog E2E renamed first header');
         return;
+      case 'table-header-all-strings':
+        await sheet.setCell('A1', 'Product');
+        await sheet.setCell('B1', 'Segment');
+        await sheet.setCell('C1', 'Quantity');
+        await sheet.setCell('D1', 'Revenue');
+        return;
+      case 'table-header-blank-cell':
+        await sheet.setCell('B1', '');
+        return;
+      case 'table-header-duplicate-cell':
+        await sheet.setCell('B1', 'SKU');
+        return;
       case 'table-header-formula-cell':
         await sheet.setCell('C1', '=LEN(A1)');
+        return;
+      case 'table-header-number-cell':
+        await sheet.setCell('C1', 123);
+        return;
+      case 'table-header-special-chars':
+        await sheet.setCell('A1', 'SKU[old]');
+        await sheet.setCell('B1', 'Category#All');
+        await sheet.setCell('C1', 'Units, Net');
         return;
       case 'table-header-offset-row':
         await setHeaderRow(batchedWorkbook, 'B2');
