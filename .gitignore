@@ -2,6 +2,7 @@ node_modules/
 dist/
 playwright-report/
 test-results/
+excel-validation/
 *.tsbuildinfo
 .DS_Store
 *.log

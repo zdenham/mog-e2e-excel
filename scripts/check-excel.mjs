@@ -1,11 +1,13 @@
-import { access, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const excelLockDir = path.join(tmpdir(), 'mog-excel-check.lock');
+const excelValidationDir = path.join(repoRoot, 'excel-validation');
 const lockWaitMs = 180_000;
 const staleLockMs = 300_000;
 
@@ -41,6 +43,23 @@ async function assertReadableFile(filePath) {
 async function hasExcel() {
   const result = await run('osascript', ['-e', 'id of application "Microsoft Excel"']);
   return result.code === 0;
+}
+
+function validationFileName(filePath) {
+  const extension = path.extname(filePath) || '.xlsx';
+  const baseName = path
+    .basename(filePath, extension)
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return `${Date.now()}-${process.pid}-${baseName || 'workbook'}${extension}`;
+}
+
+async function copyToStableExcelFolder(filePath) {
+  await mkdir(excelValidationDir, { recursive: true });
+  const stablePath = path.join(excelValidationDir, validationFileName(filePath));
+  await copyFile(filePath, stablePath);
+  return stablePath;
 }
 
 async function acquireExcelLock() {
@@ -99,8 +118,10 @@ async function checkWithExcel(filePath) {
   }
 
   let releaseLock;
+  let excelFilePath = absoluteFilePath;
   try {
     releaseLock = await acquireExcelLock();
+    excelFilePath = await copyToStableExcelFolder(absoluteFilePath);
     await run('pkill', ['-x', 'Microsoft Excel']);
     await sleep(1000);
 
@@ -192,7 +213,7 @@ end run
 `,
     );
 
-    const result = await run('osascript', [scriptPath, absoluteFilePath], { timeout: 90_000 });
+    const result = await run('osascript', [scriptPath, excelFilePath], { timeout: 90_000 });
     const output = `${result.stdout}${result.stderr}`.trim();
     if (result.code !== 0) {
       if (output.toLowerCase().includes('not allowed assistive access')) {
@@ -220,6 +241,9 @@ end run
   } catch (error) {
     return { status: 'error', message: String(error?.message ?? error) };
   } finally {
+    if (excelFilePath !== absoluteFilePath) {
+      await rm(excelFilePath, { force: true }).catch(() => undefined);
+    }
     if (releaseLock) {
       await releaseLock();
     }

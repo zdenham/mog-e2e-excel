@@ -251,6 +251,7 @@ async function main() {
     passed: validations.length - failed.length,
     results: validations,
   };
+  await mkdir(pipelineDir, { recursive: true });
   await writeFile(resultPath, JSON.stringify(summary, null, 2) + '\n');
 
   for (const result of validations) {
