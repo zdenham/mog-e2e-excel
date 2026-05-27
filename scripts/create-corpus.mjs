@@ -349,6 +349,13 @@ const scenarios = [
     edit: 'table-header-duplicate-cell',
     expectedExcelStatus: 'corrupt',
     issue: 'duplicate visible table header while tableColumn metadata remains unique',
+  },
+  {
+    id: 'table-autofilter-header-blank',
+    file: 'table-autofilter.xlsx',
+    edit: 'table-header-blank-cell',
+    expectedExcelStatus: 'corrupt',
+    issue: 'blank visible table header while tableColumn metadata remains non-empty',
   }
 ];
 
